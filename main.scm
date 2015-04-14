@@ -5,10 +5,14 @@
 (define *screen-width* #f)
 (define *screen-height* #f)
 (define *renderer* #f)
+
+(define *current-time* 0)
+(define *last-time* 0)
+
 (define *square* #f)
+(define *cursor* #f)
 (define *toggle-menu* #f)
 (define *blinking* #f)
-(define *blink-counter* #f)
 (define *menu-option1* #f)
 (define *menu-option2* #f)
 (define *menu-option3* #f)
@@ -18,6 +22,11 @@
 ;;TODO
 ;; COLOUR MENU, CLICKS ON MENU, CHANGE COLORS
 ;; FIX FILL SQUARE OR WORKAROUND
+
+(define (boolean->string val) 
+  (if val 
+      "#t" 
+      "#f"))
 
 (define (init-menu!)
   (set! *menu-option1* (alloc-SDL_Rect))
@@ -51,6 +60,27 @@
   (SDL_Rect-x-set! *square* (inexact->exact (round (-(/ *screen-width* 2) (/ (SDL_Rect-w *square*) 2)))))
   (SDL_Rect-y-set! *square* (inexact->exact (round (-(/ *screen-height* 2) (/ (SDL_Rect-w *square*) 2))))))
 
+(define (init-cursor!)
+  (set! *cursor* (alloc-SDL_Rect))
+  (let ((square-x (SDL_Rect-x *square*))
+	(square-y (SDL_Rect-y *square*))
+	(square-w (SDL_Rect-w *square*))
+	(square-h (SDL_Rect-h *square*))
+	(cursor-w (SDL_Rect-w *cursor*))	  	)
+    (SDL_Rect-h-set! *cursor* (inexact->exact (round (/ square-w 2))))
+    (SDL_Rect-w-set! *cursor* (inexact->exact (round (/ square-h 2))))
+    (SDL_Rect-x-set! *cursor* (inexact->exact (round (- (+ square-x (/ square-w 2)) (/ cursor-w 2)))))
+    (SDL_Rect-y-set! *cursor* (inexact->exact (round (- (+ square-y (/ square-w 2)) (/ cursor-w 2)))))))
+
+(define (keep-cursor-on!)
+  (let ((square-x (SDL_Rect-x *square*))
+	(square-y (SDL_Rect-y *square*))
+	(square-w (SDL_Rect-w *square*))
+	(square-h (SDL_Rect-h *square*))
+	(cursor-w (SDL_Rect-w *cursor*)))
+    (SDL_Rect-x-set! *cursor* (inexact->exact (round (- (+ square-x (/ square-w 2)) (/ cursor-w 2)))))
+    (SDL_Rect-y-set! *cursor* (inexact->exact (round (- (+ square-y (/ square-w 2)) (/ cursor-w 2)))))))
+
 (define (show-menu!)
   (SDL_SetRenderDrawColor *renderer* 255 51 51 255)
   (SDL_RenderDrawRect *renderer* *menu-option1*)
@@ -68,16 +98,15 @@
   (SDL_RenderFillRect *renderer* *menu-option1*) )
 
 (define (show-square!)
-  (cond 
-   ((equal? *blinking* #f)
-    (SDL_SetRenderDrawColor *renderer* 0 0 0 0)
-    (SDL_RenderDrawRect *renderer* *square*))
-   (else
-    (set-current-color-to-render!)
-    (SDL_RenderDrawRect *renderer* *square*)))
-  (set! *blink-counter* (- *blink-counter* 1))
   (set-current-color-to-render!)
+  (SDL_RenderDrawRect *renderer* *square*)
   (SDL_RenderFillRect *renderer* *square*)
+  (SDL_RenderPresent *renderer*))
+
+(define (show-cursor!)
+  (SDL_SetRenderDrawColor *renderer* 0 0 0 0)
+  (SDL_RenderDrawRect *renderer* *cursor*)
+  (SDL_RenderFillRect *renderer* *cursor*)
   (SDL_RenderPresent *renderer*))
 
 (define (toggle-blink!)
@@ -85,11 +114,15 @@
       (set! *blinking* #t)
       (set! *blinking* #f)))
 
-(define (blink-countdown!)
+(define (blink!)
+  (set! *current-time* (SDL_GetTicks))
   (cond
-   ((<= *blink-counter* 0)
-    (set! *blink-counter* 30)
-    (toggle-blink!))))
+   ((> *current-time* (+ *last-time* 400))
+    (if *blinking*
+	(show-cursor!)
+	(show-square!))
+    (toggle-blink!)
+    (set! *last-time* *current-time*))))
 
 (define (clear!)
   (SDL_SetRenderDrawColor *renderer* 0 0 0 0)
@@ -130,7 +163,7 @@
 	  (SDL_CreateRenderer *window* 0 SDL_RENDERER_ACCELERATED))
 
     (clear!)
-    (set! *blink-counter* 100)
+
     (SDL_SetRenderDrawColor *renderer* 255 51 51 255)
     
     (set! *current-color*
@@ -139,6 +172,7 @@
     (change-current-color! 255 255 255)
     (set-current-color-to-render!)
     (init-square!)
+    (init-cursor!)
     (init-menu!)))
 
 (define (game-loop!)
@@ -149,6 +183,7 @@
 	 (let event-loop ()  
 	   (when (= 1 (SDL_PollEvent *event))
 		 (let ((event-type (SDL_Event-type *event)))
+		   (set! *blinking* #f)
 		   (cond 
 		    ((= event-type SDL_KEYDOWN)
 		     (let* ((kevt* (SDL_Event-key *event))
@@ -211,12 +246,12 @@
 			      ((and(> mouse-x (- *screen-width* (* bwidth 4))) (< mouse-x (- *screen-width* (* bwidth 3))))
 			       (change-current-color! 255 255 255)
 			       (set-current-color-to-render!))))))))
-		 (blink-countdown!)
-		 (pp *blink-counter*)
 		 (show-menu!)
+		 (keep-cursor-on!)
 		 (show-square!)
-		 (event-loop)))
-	 (main-loop)))))
+		 (event-loop))
+	   (blink!)
+	   (main-loop))))))
   (pp "Destroying")
   (SDL_DestroyWindow *window*)
   (SDL_DestroyRenderer *renderer*)
