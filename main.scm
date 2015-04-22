@@ -1,6 +1,11 @@
 (load (spheres/sdl2 sdl2) compile: #t)
 (load (spheres/core base) compile: #t)
 
+;;(load "r678")
+; ;(myfunc 1234)
+;; (display (printf/ret "Yo! wassap!"))
+;; (newline)
+
 (define *window* #f)
 (define *screen-width* #f)
 (define *screen-height* #f)
@@ -8,11 +13,13 @@
 
 (define *current-time* 0)
 (define *last-time* 0)
+(define *last-time-move* 0)
 
 (define *square* #f)
 (define *cursor* #f)
 (define *toggle-menu* #f)
 (define *blinking* #f)
+(define *moving* #f)
 (define *menu-option1* #f)
 (define *menu-option2* #f)
 (define *menu-option3* #f)
@@ -20,13 +27,10 @@
 
 (define *current-color* #f)
 ;;TODO
-;; COLOUR MENU, CLICKS ON MENU, CHANGE COLORS
-;; FIX FILL SQUARE OR WORKAROUND
+;;SPLASH
 
 (define (boolean->string val) 
-  (if val 
-      "#t" 
-      "#f"))
+  (if val "#t" "#f"))
 
 (define (init-menu!)
   (set! *menu-option1* (alloc-SDL_Rect))
@@ -59,6 +63,7 @@
   (SDL_Rect-w-set! *square* (SDL_Rect-h *square*))
   (SDL_Rect-x-set! *square* (inexact->exact (round (-(/ *screen-width* 2) (/ (SDL_Rect-w *square*) 2)))))
   (SDL_Rect-y-set! *square* (inexact->exact (round (-(/ *screen-height* 2) (/ (SDL_Rect-w *square*) 2))))))
+
 
 (define (init-cursor!)
   (set! *cursor* (alloc-SDL_Rect))
@@ -114,15 +119,55 @@
       (set! *blinking* #t)
       (set! *blinking* #f)))
 
+(define (set-current-time!)
+  (set! *current-time* (SDL_GetTicks)))
+
 (define (blink!)
-  (set! *current-time* (SDL_GetTicks))
-  (cond
-   ((> *current-time* (+ *last-time* 400))
-    (if *blinking*
-	(show-cursor!)
-	(show-square!))
-    (toggle-blink!)
-    (set! *last-time* *current-time*))))
+  (when
+   (> *current-time* (+ *last-time* 400))
+   (if *blinking*
+       (show-cursor!)
+       (show-square!))
+   (toggle-blink!)
+   (set! *last-time* *current-time*)))
+
+(define (move!)
+  (let* ((x (SDL_Rect-x *square*))
+	 (y (SDL_Rect-y *square*))
+	 (screen-percentage 1)
+	 (step (inexact->exact (round  (* (/ *screen-height* 100) screen-percentage)))))
+    
+    (when
+     (> *current-time* (+ *last-time-move* 5))
+     (cond
+      ((eq? *moving* 'up)
+       (if (>= y step) 
+	   (SDL_Rect-y-set! *square* (- y step))
+	   (unless (<= y 0)
+		   (SDL_Rect-y-set! *square* 0)))
+       (show-square!))
+      ((eq? *moving* 'down)
+       (let ((*screen-height* (- *screen-height* (SDL_Rect-h *square*))))
+	 (if (>= (- *screen-height* y) step) 
+	     (SDL_Rect-y-set! *square* (+ y step))
+	     (unless (>= y *screen-height*)
+		     (SDL_Rect-y-set! *square* *screen-height*))))
+       (show-square!))
+      ((eq? *moving* 'right)
+       (let ((*screen-width* (- *screen-width* (SDL_Rect-w *square*))))
+	 (if (>= (- *screen-width* x) step) 
+	     (SDL_Rect-x-set! *square* (+ x step))
+	     (unless (>= x *screen-width*)
+		     (SDL_Rect-x-set! *square* *screen-width*))))
+       (show-square!))
+      ((eq? *moving* 'left)
+       (if (>= x step) 
+	   (SDL_Rect-x-set! *square* (- x step))
+	   (unless (<= x 0)
+		   (SDL_Rect-x-set! *square* 0)))
+       (show-square!)))
+     (keep-cursor-on!)
+     (set! *last-time-move* *current-time*))))
 
 (define (clear!)
   (SDL_SetRenderDrawColor *renderer* 0 0 0 0)
@@ -187,43 +232,34 @@
 		   (cond 
 		    ((= event-type SDL_KEYDOWN)
 		     (let* ((kevt* (SDL_Event-key *event))
-			    (key (SDL_Keysym-sym (SDL_KeyboardEvent-keysym kevt*)))
-			    (x (SDL_Rect-x *square*))
-			    (y (SDL_Rect-y *square*))
-			    (screen-percentage 1)
-			    (step (inexact->exact (round  (* (/ *screen-height* 100) screen-percentage)))))
+			    (key (SDL_Keysym-sym (SDL_KeyboardEvent-keysym kevt*))))
 		       (cond
 			((= key SDLK_ESCAPE)
 			 (quit))
-
 			((= key SDLK_UP)
-			 (if (>= y step) 
-			     (SDL_Rect-y-set! *square* (- y step))
-			     (unless (<= y 0)
-				     (SDL_Rect-y-set! *square* 0))))
-
+			 (set! *moving* 'up))
 			((= key SDLK_DOWN)
-			 (let ((*screen-height* (- *screen-height* (SDL_Rect-h *square*))))
-			   (if (>= (- *screen-height* y) step) 
-			       (SDL_Rect-y-set! *square* (+ y step))
-			       (unless (>= y *screen-height*)
-				       (SDL_Rect-y-set! *square* *screen-height*)))))
-
+			 (set! *moving* 'down))
 			((= key SDLK_RIGHT)
-			 (let ((*screen-width* (- *screen-width* (SDL_Rect-w *square*))))
-			   (if (>= (- *screen-width* x) step) 
-			       (SDL_Rect-x-set! *square* (+ x step))
-			       (unless (>= x *screen-width*)
-				       (SDL_Rect-x-set! *square* *screen-width*)))))
-
+			 (set! *moving* 'right))
 			((= key SDLK_LEFT)
-			 (if (>= x step) 
-			     (SDL_Rect-x-set! *square* (- x step))
-			     (unless (<= x 0)
-				     (SDL_Rect-x-set! *square* 0))))
+			 (set! *moving* 'left))
 			(else 
 			 (SDL_LogVerbose SDL_LOG_CATEGORY_APPLICATION 
 					 (string-append "Key: " (number->string key)))))))
+		    ((= event-type SDL_KEYUP)
+		     (let* ((kevt* (SDL_Event-key *event))
+			    (key (SDL_Keysym-sym (SDL_KeyboardEvent-keysym kevt*))))
+		       (cond
+	       		((= key SDLK_UP)
+			 (set! *moving* #f))
+			((= key SDLK_DOWN)
+			 (set! *moving* #f))
+			((= key SDLK_RIGHT)
+			 (set! *moving* #f))
+			((= key SDLK_LEFT)
+			 (set! *moving* #f)))))
+		    
 		    ((= event-type SDL_MOUSEBUTTONDOWN)
 		     
 		     (let* ((mouse-event* (SDL_Event-button *event))
@@ -246,13 +282,12 @@
 			      ((and(> mouse-x (- *screen-width* (* bwidth 4))) (< mouse-x (- *screen-width* (* bwidth 3))))
 			       (change-current-color! 255 255 255)
 			       (set-current-color-to-render!))))))))
-		 (show-menu!)
-		 (keep-cursor-on!)
-		 (show-square!)
 		 (event-loop))
+	   (set-current-time!)
+	   (move!)
+	   (show-menu!)
 	   (blink!)
 	   (main-loop))))))
-  (pp "Destroying")
   (SDL_DestroyWindow *window*)
   (SDL_DestroyRenderer *renderer*)
   (SDL_Quit))
