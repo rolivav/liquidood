@@ -1,10 +1,12 @@
 (load (spheres/sdl2 sdl2) compile: #t)
 (load (spheres/core base) compile: #t)
 
-;;(load "r678")
-; ;(myfunc 1234)
-;; (display (printf/ret "Yo! wassap!"))
-;; (newline)
+(load "r678")
+;(myfunc 1234)
+;(display (printf/ret "Yo! wassap!"))
+;(processCoordinates)
+;(display (getX))
+;newline)
 
 (define *window* #f)
 (define *screen-width* #f)
@@ -20,6 +22,8 @@
 (define *toggle-menu* #f)
 (define *blinking* #f)
 (define *moving* #f)
+(define *first-accelerometer* '#(0 0 0))
+
 (define *menu-option1* #f)
 (define *menu-option2* #f)
 (define *menu-option3* #f)
@@ -131,14 +135,33 @@
    (toggle-blink!)
    (set! *last-time* *current-time*)))
 
+(define (accelerometer-move!)
+  (processCoordinates)
+  (let* ((x (getX))
+	 (y (getY))
+	 (div (/ (abs x) (if (= y 0) 1 (abs y)))))
+    ;(display div)
+    ;(newline)
+    (cond
+     ((and (> div 1) (> (abs x) 100)) ;; x wins
+      (if (> x 0)
+	  (set! *moving* 'right)
+	  (set! *moving* 'left)))
+     ((and (< div 1) (> (abs y) 100)) ;; y wins 
+      (if (> y 0)
+	  (set! *moving* 'up)
+	  (set! *moving* 'down)))
+     (else
+      (if (eq? *moving* 'stop) 0 (set! *moving* 'stop))))))
+
 (define (move!)
   (let* ((x (SDL_Rect-x *square*))
 	 (y (SDL_Rect-y *square*))
-	 (screen-percentage 1)
+	 (screen-percentage 2)
 	 (step (inexact->exact (round  (* (/ *screen-height* 100) screen-percentage)))))
     
     (when
-     (> *current-time* (+ *last-time-move* 5))
+     (> *current-time* (+ *last-time-move* 1))
      (cond
       ((eq? *moving* 'up)
        (if (>= y step) 
@@ -252,13 +275,13 @@
 			    (key (SDL_Keysym-sym (SDL_KeyboardEvent-keysym kevt*))))
 		       (cond
 	       		((= key SDLK_UP)
-			 (set! *moving* #f))
+			 (when (eq? *moving* 'up) (set! *moving* #f)))
 			((= key SDLK_DOWN)
-			 (set! *moving* #f))
+			 (when (eq? *moving* 'down) (set! *moving* #f)))
 			((= key SDLK_RIGHT)
-			 (set! *moving* #f))
+			 (when (eq? *moving* 'right) (set! *moving* #f)))
 			((= key SDLK_LEFT)
-			 (set! *moving* #f)))))
+			 (when (eq? *moving* 'left) (set! *moving* #f))))))
 		    
 		    ((= event-type SDL_MOUSEBUTTONDOWN)
 		     
@@ -283,6 +306,7 @@
 			       (change-current-color! 255 255 255)
 			       (set-current-color-to-render!))))))))
 		 (event-loop))
+	   (accelerometer-move!)
 	   (set-current-time!)
 	   (move!)
 	   (show-menu!)
