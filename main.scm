@@ -2,11 +2,6 @@
 (load (spheres/core base) compile: #t)
 
 (load "r678")
-;(myfunc 1234)
-;(display (printf/ret "Yo! wassap!"))
-;(processCoordinates)
-;(display (getX))
-;newline)
 
 (define *window* #f)
 (define *screen-width* #f)
@@ -137,11 +132,10 @@
 
 (define (accelerometer-move!)
   (processCoordinates)
+  (reset!)
   (let* ((x (getX))
 	 (y (getY))
 	 (div (/ (abs x) (if (= y 0) 1 (abs y)))))
-    ;(display div)
-    ;(newline)
     (cond
      ((and (> div 1) (> (abs x) 100)) ;; x wins
       (if (> x 0)
@@ -191,6 +185,11 @@
        (show-square!)))
      (keep-cursor-on!)
      (set! *last-time-move* *current-time*))))
+
+(define (reset!)
+  (let ((z (getZ)))
+    (when (< z -250)
+	  (clear!))))
 
 (define (clear!)
   (SDL_SetRenderDrawColor *renderer* 0 0 0 0)
